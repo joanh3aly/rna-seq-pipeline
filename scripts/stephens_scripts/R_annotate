@@ -1,0 +1,24 @@
+library("lattice",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("Matrix",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+
+library("Rsubread",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("limma",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("edgeR",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+load("gene.Rdata")
+columns <- c("GeneID","Symbol", "chromosome", "type_of_gene")
+GeneInfo <- read.columns("Homo_sapiens.gene_info",required=columns, stringsAsFactors = FALSE)
+m <- match(gene$annotation$GeneID, GeneInfo$GeneID)
+Ann <- cbind(gene$annotation[, c("GeneID", "Chr", "Length")],GeneInfo[m, c("Symbol", "type_of_gene")])
+Ann$Chr <- unlist(lapply(strsplit(Ann$Chr, ";"), function(x) paste(unique(x), collapse = "|")))
+Ann$Chr <- gsub("chr", "", Ann$Chr)
+head(Ann)
+y <- DGEList(counts = Counts, genes = Ann)
+dim(y)
+A <- rowSums(y$counts)
+isexpr <- A > 10
+hasannot <- rowSums(is.na(y$genes)) == 0
+y <- y[isexpr & hasannot, , keep.lib.size = FALSE]
+dim(y)
+y <- calcNormFactors(y)
+save(list=c('columns','GeneInfo','Ann','y'),file="norm.Rdata")
+

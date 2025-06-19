@@ -1,0 +1,11 @@
+library("lattice",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("Matrix",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+
+library("Rsubread",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+Targets <- read.delim("Targets.txt",header=FALSE)
+BAMFiles <- paste0(Targets[1:6,1], ".PE.subread.bam")
+gene <- featureCounts(BAMFiles, useMetaFeatures=TRUE, annot.inbuilt="hg19", allowMultiOverlap=TRUE, isPairedEnd=TRUE)
+Counts <- gene$counts
+propmap <- propmapped(BAMFiles)
+summary(propmap[,"PropMapped"])
+save(list=c('gene','propmap','Counts', 'Targets'),file="gene.Rdata")

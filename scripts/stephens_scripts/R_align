@@ -1,0 +1,12 @@
+library("lattice",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("Matrix",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("Rsubread",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("limma",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("edgeR",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+
+Targets <- read.delim("Targets.txt",header=FALSE)
+FASTQFiles_1 <- Targets[1:6,1]
+FASTQFiles_2 <- Targets[7:12,1]
+BAMFiles <- paste0(Targets[1:6,1], ".PE.subread.bam")
+align("GRCh37", readfile1 = as.matrix(FASTQFiles_1),readfile2 = as.matrix(FASTQFiles_2), input_format = "gzFASTQ", output_file = BAMFiles)
+

@@ -1,0 +1,4 @@
+library("lattice",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("Matrix",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+library("Rsubread",lib.loc="/home/data/tapm/transcriptomics/2024_2025/librarys/")
+buildindex(basename="GRCh37",reference="GRCh37.fa")
