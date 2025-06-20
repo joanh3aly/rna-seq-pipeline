@@ -29,7 +29,7 @@ subread-index-sam-002493-lMVlD3
 4_index_genome.sbatch
 config.sbatch
 generate_directories.sbatch
-temp.sbatch
+*temp.sbatch
 test_module_import.sbatch
 
 rna-seq-pipeline_backup

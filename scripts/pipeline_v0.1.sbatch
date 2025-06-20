@@ -222,7 +222,7 @@ sbatch --job-name=fastqc_untrimmed \
 #        --array="0-${MAX_ARRAY_INDEX}" \
 #        --output="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_trim_FASTQ.out" \
 #        --error="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_trim_FASTQ.err" \
-#        ./2_trim_fastq.sbatch "$RUN_ID" "$WORK_DIR")
+#        ./2_trim_fastq_bbmap.sbatch "$RUN_ID" "$WORK_DIR")
 
 # if [ -z "$TRIMMING_JOB_ID" ]; then
 #     echo "ERROR: Trimming job submission failed." >&2
@@ -263,7 +263,7 @@ fi
 echo "Trimmed FASTQC job ID: $FASTQC_TRIMMED_JOB_ID"
 
 # ALIGN FASTQ trimmed files #####################################################################################
-echo "Submitting trimmed FastQC array job for $NUM_FASTQ_FILES files (0-${MAX_ARRAY_INDEX})" #with concurrency $MAX_CONCURRENT_TASKS."
+echo "Submitting alignment FastQ array job for $NUM_TRIMMED_FASTQ_FILES files (0-${MAX_TRIMMED_ARRAY_INDEX})" #with concurrency $MAX_CONCURRENT_TASKS."
 HISAT2_ALIGN_TRIMMED_JOB_ID=$(sbatch --parsable \
        --job-name=hisat2_align \
        --array="0-${MAX_TRIMMED_ARRAY_INDEX}" \

@@ -26,17 +26,15 @@ WORK_DIR="$2"
 source $WORK_DIR/scripts/parallelize_fastq_module.sbatch
 
 RUN_ID="$1"
-# RUN_ID="run_20250618_2125"
+# RUN_ID="run_20250620_2125"
 # DELETE_UNPAIRED="${3:-true}" 
 
 TRIMMED_FASTQ_DIR="${WORK_DIR}/$RUN_ID/trimmed_fastq"
 SLURM_SUBMIT_DIR="${WORK_DIR}/scripts"
-# HISAT2 human genome index prefix paths
 # HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b/GRCh38_splices_index"
-# HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/grch38_snp/genome_snp"
+HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/grch38_snp/genome_snp"
 # HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_masked/GRCh38_splices_index_masked"
-HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_pc_trans_masked/GRCh38_pc_trans_splices_index_masked"
-# Directory for output BAM files
+# HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_pc_trans_masked/GRCh38_pc_trans_splices_index_masked"
 OUTPUT_DIR="${WORK_DIR}/$RUN_ID/aligner_outputs"
 
 
@@ -95,6 +93,7 @@ if fastq_output=$(populate_fastq_array "$TRIMMED_FASTQ_DIR"); then
                 -2 "$INPUT_FILEPATH_R2" \
                 -p "$SLURM_CPUS_PER_TASK" \
                 --summary-file "$ALIGN_LOG" \
+                --avoid-pseudogene \
                 --dta \
                 | samtools view -bS - > "$OUTPUT_BAM"
 

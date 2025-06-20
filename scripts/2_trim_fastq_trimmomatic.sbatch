@@ -32,6 +32,7 @@ printf "\n\n Run ID TRIM: %s \n\n" "${run_id}"
 # WORK_DIR=/home/data/human_genetics/USERS/jhealy/rna_pipeline_v0.1
 WORK_DIR="$2"
 DELETE_UNPAIRED="${3:-true}" 
+printf "\n\n DELETE_UNPAIRED?: %s \n\n" "${DELETE_UNPAIRED}"
 INPUT_DIR=$WORK_DIR/$run_id/fastq_inputs/concat_lanes
 OUTPUT_DIR_TRIMMED_FASTQ=$WORK_DIR/$run_id/trimmed_fastq
 ADAPTER_FASTA="$EBROOTTRIMMOMATIC/adapters/TruSeq3-PE.fa"
@@ -40,9 +41,9 @@ TRIMMOMATIC_JAR="$EBROOTTRIMMOMATIC/trimmomatic-0.39.jar"
 
 cleanup_unpaired_files() {
     if [[ "$DELETE_UNPAIRED" == "true" ]]; then
-        printf "INFO" "Searching for and deleting unpaired files in '$TRIMMED_FASTQ_DIR'..." >&2
+        printf "INFO" "Searching for and deleting unpaired files in '$OUTPUT_DIR_TRIMMED_FASTQ'..." >&2
         # Find and delete files whose names contain '_unpaired_'
-        find "$TRIMMED_FASTQ_DIR" -maxdepth 1 -type f -name "*_unpaired_*" -delete
+        find "$OUTPUT_DIR_TRIMMED_FASTQ" -maxdepth 1 -type f -name "*_unpaired_*" -delete
 
         if [ $? -eq 0 ]; then
             printf "INFO" "Unpaired file cleanup completed successfully." >&2
