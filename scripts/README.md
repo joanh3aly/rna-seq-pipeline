@@ -80,3 +80,4 @@ Trimmomatic/0.39-Java-11
 Python/3.11.5-GCCcore-13.2.0
 HISAT2/2.2.1-foss-2019b
 SAMtools/1.19.2-GCC-13.2.0
+test
