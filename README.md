@@ -40,7 +40,7 @@ The run ID directory will be automatically created in the base directory from th
 - hisat2_index_ref.sbatch can be used to create a new index. It is located in the scripts directory.
 - Run sbatch hisat2_index_ref.sbatch in the bash console to execute this script.
 - All indices, reference genomes and supporting files (gtf, bed, vcf etc) are in the reference_data folder.
-- All index files should be saved in the  `reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_<name of custom version>` directory.
+- All output files from the indexing script should be saved in the  `reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_<name of custom version>` directory.
     * The indexing script should create 8 ht2 files (these are used by the alignment step) and 4 temporary files that are used to generate the ht2 files (genome.exon/genome.haplotype/genome.snp/genome.ss)
 - Currently there are 2 human genome index options in the human/GRCH38 subdirectories:
     * reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_pc_trans_masked - this index was generated from the exon and ss (splice site) temp files, with blacklisted PKD1 pseudogenes from the protein coding GRCH38 reference genome (masked_pc_trans_genome_2.fasta) and basic gtf file (gencode.v48.basic.annotation_no_pseudogenes.gtf).

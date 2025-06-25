@@ -11,7 +11,7 @@
 #SBATCH --partition=ProdQ
 #SBATCH --time=2-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --mem=4000
+#SBATCH --mem=100GB
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=joanhealy24@rcsi.com
 # # SBATCH --array=0-1%

@@ -11,7 +11,7 @@
 #SBATCH --partition=ProdQ
 #SBATCH --time=2-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --mem=4000
+#SBATCH --mem=100G
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=joanhealy24@rcsi.com
 
@@ -19,6 +19,8 @@ set -x
 module load R
 WORK_DIR=/home/data/human_genetics/USERS/jhealy/rna_pipeline_v0.1
 INPUT_DROP=$WORK_DIR/fastq_drop
+INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/p14_masked/GRCh38_basic_ss_exon_ind"
+# INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/prebuilt_grch38_snp_tran/genome_snp_tran"
 
 # R_LIBRARIES_PATH="${OUTPUT_DIR}/libraries/"
 
@@ -63,6 +65,7 @@ generate_run_id_directory() {
     # This is the ONLY line that should output to stdout
     echo "${output_directory}" # No trailing slash for easier variable use, add it if needed for specific commands.
 }
+
 
 concatenate_sample_lanes() {
     local RAW_FASTQ_DIR="$1/batch1+2_combined"
@@ -162,12 +165,20 @@ concatenate_sample_lanes() {
 
 
 
+# Generate RUN ID, directory structure, and move all input files from fastq_drop to the run ID dir's fastq_inputs dir ######################################
+echo "Starting dir generation..."
+STAGE1_START=$SECONDS
+
 echo "DEBUG: Before calling generate_run_id_directory()"
 # Generate the RUN_ID and output directory once
 run_output_dir="$(generate_run_id_directory)"
 echo "DEBUG: After calling generate_run_id_directory()"
 echo "DEBUG: RUN_OUTPUT_DIR is: $run_output_dir"
 RUN_ID=$(basename "$run_output_dir") # Extract just the run_id part
+
+STAGE1_DURATION=$(( SECONDS - STAGE1_START ))
+echo "Finished dir generation in $STAGE1_DURATION seconds."
+
 
 # --- Main execution block ---
 # if [ "$#" -ne 2 ]; then
@@ -176,12 +187,19 @@ RUN_ID=$(basename "$run_output_dir") # Extract just the run_id part
 #     exit 1
 # fi
 
-# Call the function with the provided arguments
+
+# Concatenate samples ################################################################
+echo "Starting sample concatenation..."
+STAGE2_START=$SECONDS
+
 concatenate_sample_lanes "$INPUT_DROP" "$RUN_ID" "$WORK_DIR"
 
+STAGE2_DURATION=$(( SECONDS - STAGE2_START ))
+echo "Finished sample concatenation in $STAGE2_DURATION seconds."
 
-# Parallelisation job areay arguemnts ###########################################################################
-
+# Parallelisation job array arguemnts ###########################################################################
+echo "Starting parallelisation..."
+STAGE3_START=$SECONDS
 # Define the input FASTQ directory for the input files for the *current* run
 CURRENT_RUN_FASTQ_DIR="${WORK_DIR}/${RUN_ID}/fastq_inputs/concat_lanes"
 echo "DEBUG CURRENT_RUN_FASTQ_DIR is: ${CURRENT_RUN_FASTQ_DIR}"
@@ -205,14 +223,22 @@ printf "\n\n DEBUG: NUM_TRIMMED_FASTQ_FILES is: ${NUM_TRIMMED_FASTQ_FILES} \n\n"
 MAX_TRIMMED_ARRAY_INDEX=$((NUM_TRIMMED_FASTQ_FILES - 1))
 printf "\n\n DEBUG: MAX_TRIMMED_ARRAY_INDEX is: ${MAX_TRIMMED_ARRAY_INDEX} \n\n"
 
+STAGE3_DURATION=$(( SECONDS - STAGE3_START ))
+echo "Finished parallelisation in $STAGE3_DURATION seconds."
 
 # FastQC untrimmed files ###########################################################################
+echo "Starting FASTQC untrimmed..."
+STAGE4_START=$SECONDS
+
 echo "Submitting FastQC array job for $NUM_FASTQ_FILES files (0-${MAX_ARRAY_INDEX})" #with concurrency $MAX_CONCURRENT_TASKS."
 sbatch --job-name=fastqc_untrimmed \
        --array="0-${MAX_ARRAY_INDEX}" \
        --output="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_fastqc_untrimmed.out" \
        --error="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_fastqc_untrimmed.err" \
        ./1_fastqc_untrimmed.sbatch "$RUN_ID" "$WORK_DIR"
+
+STAGE4_DURATION=$(( SECONDS - STAGE4_START ))
+echo "Finished FastQC untrimmed in $STAGE4_DURATION seconds."
 
 # FASTQ trim files with BBMAP ######################################################################################
 # echo "Submitting trim FastQ array job for $NUM_FASTQ_FILES files (0-${MAX_ARRAY_INDEX})" #with concurrency $MAX_CONCURRENT_TASKS."
@@ -231,10 +257,13 @@ sbatch --job-name=fastqc_untrimmed \
 # echo "Trimming job ID: $TRIMMING_JOB_ID"
 
 # FASTQ trim files with TRIMMOMATIC ######################################################################################
+echo "Starting FASTQ trimming..."
+STAGE5_START=$SECONDS
+
 echo "Submitting trim FastQ array job for $NUM_FASTQ_FILES files (0-${MAX_ARRAY_INDEX})" #with concurrency $MAX_CONCURRENT_TASKS."
 TRIMMING_JOB_ID=$(sbatch --parsable \
        --job-name=trim_fastq \
-       --mem=20G \
+       --mem=200G \
        --array="0-${MAX_ARRAY_INDEX}" \
        --output="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_trim_FASTQ.out" \
        --error="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_trim_FASTQ.err" \
@@ -246,7 +275,12 @@ if [ -z "$TRIMMING_JOB_ID" ]; then
 fi
 echo "Trimming job ID: $TRIMMING_JOB_ID"
 
+STAGE5_DURATION=$(( SECONDS - STAGE5_START ))
+echo "Finished trimming in $STAGE5_DURATION seconds."
 # FASTQC trimmed files #####################################################################################
+echo "Starting FASTQC of trimmed FastQ..."
+STAGE6_START=$SECONDS
+
 echo "Submitting trimmed FastQC array job for $NUM_FASTQ_FILES files (0-${MAX_ARRAY_INDEX})" #with concurrency $MAX_CONCURRENT_TASKS."
 FASTQC_TRIMMED_JOB_ID=$(sbatch --parsable \
        --job-name=fastqc_trimmed \
@@ -262,7 +296,13 @@ if [ -z "$FASTQC_TRIMMED_JOB_ID" ]; then
 fi
 echo "Trimmed FASTQC job ID: $FASTQC_TRIMMED_JOB_ID"
 
+STAGE6_DURATION=$(( SECONDS - STAGE6_START ))
+echo "Finished trimmed FastQC in $STAGE6_DURATION seconds."
+
 # ALIGN FASTQ trimmed files #####################################################################################
+echo "Starting alignment..."
+STAGE7_START=$SECONDS
+
 echo "Submitting alignment FastQ array job for $NUM_TRIMMED_FASTQ_FILES files (0-${MAX_TRIMMED_ARRAY_INDEX})" #with concurrency $MAX_CONCURRENT_TASKS."
 HISAT2_ALIGN_TRIMMED_JOB_ID=$(sbatch --parsable \
        --job-name=hisat2_align \
@@ -270,13 +310,16 @@ HISAT2_ALIGN_TRIMMED_JOB_ID=$(sbatch --parsable \
        --output="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_hisat2_align_trimmed.out" \
        --error="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_hisat2_align_trimmed.err" \
        --dependency=afterany:$TRIMMING_JOB_ID \
-       ./4_hisat2_align_multiple.sbatch "$RUN_ID" "$WORK_DIR")
+       ./4_hisat2_align_multiple.sbatch "$RUN_ID" "$WORK_DIR" "$INDEX")
 
 if [ -z "$HISAT2_ALIGN_TRIMMED_JOB_ID" ]; then
     echo "ERROR: Alignment job submission failed." >&2
     exit 1
 fi
 echo "HISAT2 Alignment job ID: $HISAT2_ALIGN_TRIMMED_JOB_ID"
+
+STAGE7_DURATION=$(( SECONDS - STAGE7_START ))
+echo "Finished alignment in $STAGE7_DURATION seconds."
 
 #######################################################################################
 # Submit R script, passing the variable as a command-line argument

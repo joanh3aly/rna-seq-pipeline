@@ -10,7 +10,7 @@
 #SBATCH --error=hisat2_align_%A_%a.err
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16     
-#SBATCH --mem=16G              
+#SBATCH --mem=100G              
 #SBATCH --time=08:00:00       
 #SBATCH --partition=ProdQ 
 #SBATCH --array=0-1
@@ -31,10 +31,15 @@ RUN_ID="$1"
 
 TRIMMED_FASTQ_DIR="${WORK_DIR}/$RUN_ID/trimmed_fastq"
 SLURM_SUBMIT_DIR="${WORK_DIR}/scripts"
+
+HISAT2_INDEX="$3"
 # HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b/GRCh38_splices_index"
-HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/grch38_snp/genome_snp"
+# HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/grch38_snp/genome_snp
+# HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/prebuilt_grch38_snp_tran/genome_snp_tran"
+# HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_basic"
 # HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_masked/GRCh38_splices_index_masked"
 # HISAT2_INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_pc_trans_masked/GRCh38_pc_trans_splices_index_masked"
+
 OUTPUT_DIR="${WORK_DIR}/$RUN_ID/aligner_outputs"
 
 

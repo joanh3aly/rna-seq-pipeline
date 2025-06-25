@@ -11,7 +11,7 @@
 #SBATCH --partition=ProdQ
 #SBATCH --time=2-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --mem=4000
+#SBATCH --mem=150G
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=joanhealy24@rcsi.com
 # # SBATCH --array=0-1%
@@ -32,7 +32,7 @@ printf "\n\n Run ID : %s \n\n" "${run_id}"
 # WORK_DIR="$2"
 # # WORK_DIR=/home/data/human_genetics/USERS/jhealy/rna_pipeline_v0.1
 # source ${WORK_DIR}/scripts/parallelize_fastq_module.sbatch
-INPUT_DIR_FASTQ=$WORK_DIR/$run_id/trimmed_fastq/concat_lanes
+INPUT_DIR_FASTQ=$WORK_DIR/$run_id/trimmed_fastq
 OUTPUT_DIR_TRIMMED_FASTQC=$WORK_DIR/$run_id/trimmed_fastqc_outputs
 
 
