@@ -19,7 +19,8 @@ set -x
 module load R
 WORK_DIR=/home/data/human_genetics/USERS/jhealy/rna_pipeline_v0.1
 INPUT_DROP=$WORK_DIR/fastq_drop
-INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/p14_masked/GRCh38_basic_ss_exon_ind"
+# INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/p14_masked/GRCh38_basic_ss_exon_ind"
+INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/p14_masked_gtf_masked/GRCh38_basic_ss_exon_index"
 # INDEX="${WORK_DIR}/reference_data/human/GRCh38/HISAT2_index/prebuilt_grch38_snp_tran/genome_snp_tran"
 
 # R_LIBRARIES_PATH="${OUTPUT_DIR}/libraries/"
@@ -156,7 +157,7 @@ concatenate_sample_lanes() {
             echo "  No R2 files found for '$sample_id'. Assuming single-end data if R1 was found."
         fi
 
-        echo "" # Add a blank line for readability between samples
+        echo ""
     done
 
     echo "FASTQ lane combination completed for all samples."
@@ -210,18 +211,6 @@ printf "\n\nDEBUG NUM_FASTQ_FILES is: ${NUM_FASTQ_FILES} \n\n"
 #  0-indexed array tasks
 MAX_ARRAY_INDEX=$((NUM_FASTQ_FILES - 1))
 printf "\n\nDEBUG MAX_ARRAY_INDEX is: ${MAX_ARRAY_INDEX} \n\n"
-
-# # Set concurrency
-# MAX_CONCURRENT_TASKS=20 # Example: run 20 FastQC jobs at a time
-
-TRIMMED_FASTQ_DIR="${WORK_DIR}/${run_id}/trimmed_fastq"
-
-# Get the actual number of trimmed FASTQ files copied into the trimmed fastq directory
-NUM_TRIMMED_FASTQ_FILES=$(find "$TRIMMED_FASTQ_DIR" -maxdepth 1 -type f -name "*.fq.gz" | wc -l)
-printf "\n\n DEBUG: NUM_TRIMMED_FASTQ_FILES is: ${NUM_TRIMMED_FASTQ_FILES} \n\n"
-#  0-indexed array tasks
-MAX_TRIMMED_ARRAY_INDEX=$((NUM_TRIMMED_FASTQ_FILES - 1))
-printf "\n\n DEBUG: MAX_TRIMMED_ARRAY_INDEX is: ${MAX_TRIMMED_ARRAY_INDEX} \n\n"
 
 STAGE3_DURATION=$(( SECONDS - STAGE3_START ))
 echo "Finished parallelisation in $STAGE3_DURATION seconds."
@@ -277,6 +266,7 @@ echo "Trimming job ID: $TRIMMING_JOB_ID"
 
 STAGE5_DURATION=$(( SECONDS - STAGE5_START ))
 echo "Finished trimming in $STAGE5_DURATION seconds."
+
 # FASTQC trimmed files #####################################################################################
 echo "Starting FASTQC of trimmed FastQ..."
 STAGE6_START=$SECONDS
@@ -301,25 +291,57 @@ echo "Finished trimmed FastQC in $STAGE6_DURATION seconds."
 
 # ALIGN FASTQ trimmed files #####################################################################################
 echo "Starting alignment..."
-STAGE7_START=$SECONDS
 
-echo "Submitting alignment FastQ array job for $NUM_TRIMMED_FASTQ_FILES files (0-${MAX_TRIMMED_ARRAY_INDEX})" #with concurrency $MAX_CONCURRENT_TASKS."
-HISAT2_ALIGN_TRIMMED_JOB_ID=$(sbatch --parsable \
+printf "\nWaiting for trimming job (%s) to complete...\n" "$TRIMMING_JOB_ID"
+# Loop until the job is no longer in the queue
+while squeue -h -j "$TRIMMING_JOB_ID" &>/dev/null; do
+    echo "Trimming job $TRIMMING_JOB_ID is still running. Waiting 30 seconds..."
+    sleep 30
+done
+# Check final status using sacct to ensure it completed successfully
+JOB_STATE=$(sacct -j "$TRIMMING_JOB_ID" --format=State -n -P | head -n1)
+JOB_STATE=$(echo "$JOB_STATE" | tr -d '[:space:]') 
+
+if [[ "$JOB_STATE" == "COMPLETED" ]]; then
+    echo "Trimming job $TRIMMING_JOB_ID finished successfully. Proceeding to calculate alignment index."
+    TRIMMED_FASTQ_DIR="${WORK_DIR}/${RUN_ID}/trimmed_fastq"
+    # Get the actual number of trimmed FASTQ files copied into the trimmed fastq directory
+    NUM_TRIMMED_FASTQ_FILES=$(find "$TRIMMED_FASTQ_DIR" -maxdepth 1 -type f -name "*.fq.gz" | wc -l)
+    printf "\n\n DEBUG: NUM_TRIMMED_FASTQ_FILES is: ${NUM_TRIMMED_FASTQ_FILES} \n\n"
+    #  0-indexed array tasks
+    MAX_TRIMMED_ARRAY_INDEX=$((NUM_TRIMMED_FASTQ_FILES - 1))
+    printf "\n\n DEBUG: MAX_TRIMMED_ARRAY_INDEX is: ${MAX_TRIMMED_ARRAY_INDEX} \n\n"
+
+    echo "Submitting alignment FastQ array job for $NUM_TRIMMED_FASTQ_FILES files (0-${MAX_TRIMMED_ARRAY_INDEX})" 
+    sbatch --parsable \
        --job-name=hisat2_align \
        --array="0-${MAX_TRIMMED_ARRAY_INDEX}" \
-       --output="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_hisat2_align_trimmed.out" \
-       --error="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_hisat2_align_trimmed.err" \
+       --output="${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_hisat2_align_trimmed.out" \
+       --error="${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_hisat2_align_trimmed.err" \
        --dependency=afterany:$TRIMMING_JOB_ID \
-       ./4_hisat2_align_multiple.sbatch "$RUN_ID" "$WORK_DIR" "$INDEX")
-
-if [ -z "$HISAT2_ALIGN_TRIMMED_JOB_ID" ]; then
-    echo "ERROR: Alignment job submission failed." >&2
-    exit 1
+       ./4_hisat2_align_multiple.sbatch "$RUN_ID" "$WORK_DIR" "$INDEX"
+else
+    echo "ERROR: Trimming job $TRIMMING_JOB_ID finished with state: $JOB_STATE. Alignment will not proceed." >&2
+    exit 1 # Exit if the trimming job failed
 fi
-echo "HISAT2 Alignment job ID: $HISAT2_ALIGN_TRIMMED_JOB_ID"
 
-STAGE7_DURATION=$(( SECONDS - STAGE7_START ))
-echo "Finished alignment in $STAGE7_DURATION seconds."
+
+echo "Submitting alignment FastQ array job for $NUM_TRIMMED_FASTQ_FILES files (0-${MAX_TRIMMED_ARRAY_INDEX})" #with concurrency $MAX_CONCURRENT_TASKS."
+# HISAT2_ALIGN_TRIMMED_JOB_ID=$(sbatch --parsable \
+#        --job-name=hisat2_align \
+#        --array="0-${MAX_TRIMMED_ARRAY_INDEX}" \
+#        --output="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_hisat2_align_trimmed.out" \
+#        --error="/${WORK_DIR}/${RUN_ID}/slurmfiles/%A_%a_hisat2_align_trimmed.err" \
+#        --dependency=afterany:$TRIMMING_JOB_ID \
+#        ./4_hisat2_align_multiple.sbatch "$RUN_ID" "$WORK_DIR" "$INDEX")
+
+# if [ -z "$HISAT2_ALIGN_TRIMMED_JOB_ID" ]; then
+#     echo "ERROR: Alignment job submission failed." >&2
+#     exit 1
+# fi
+# echo "HISAT2 Alignment job ID: $HISAT2_ALIGN_TRIMMED_JOB_ID"
+
+
 
 #######################################################################################
 # Submit R script, passing the variable as a command-line argument
@@ -331,88 +353,4 @@ echo "Finished alignment in $STAGE7_DURATION seconds."
 # if ${index-genome} is true:
 #   sbatch 4_index_ref.sbatch "${index-genome}" "${aligner-type}"
 
-# INDEX Reference FASTQ and GTF files (optional) ############################################################################
-
-# # Define variables to hold the parsed argument values
-# GENOME_INDEX_NAME="" # Will store the value of --index-genome (e.g., GRCh38, mm10)
-# ALIGNER_NAME=""      # Will store the value of --aligner-type (e.g., hisat2, STAR)
-
-# # --- Argument Parsing using getopt ---
-# # -o for short options: i for --index-genome (requires an argument)
-# # -o for short options: a for --aligner-type (requires an argument)
-# # --long for long options: index-genome: (requires an argument)
-# # --long for long options: aligner-type: (requires an argument)
-# # `"$@"` passes all command-line arguments to getopt
-# TEMP=$(getopt -o i:a:h --long index-genome:,aligner-type:,help -- "$@")
-
-# # Check if getopt encountered an error (e.g., invalid option, missing argument)
-# if [ $? -ne 0 ]; then
-#   echo "Error: Invalid arguments provided." >&2
-#   echo "Usage: $0 [-i|--index-genome <genome_name>] [-a|--aligner-type <aligner_name>]"
-#   echo "       $0 [--help]"
-#   exit 1
-# fi
-
-# # Set the shell's positional parameters to the output of getopt
-# # This handles argument reordering and separates options from non-options
-# eval set -- "$TEMP"
-
-# # Loop through the parsed arguments
-# while true; do
-#   case "$1" in
-#     -i|--index-genome)
-#       GENOME_INDEX_NAME="$2"
-#       shift 2 # Shift past the option and its argument
-#       ;;
-#     -a|--aligner-type)
-#       ALIGNER_NAME="$2"
-#       shift 2 # Shift past the option and its argument
-#       ;;
-#     -h|--help)
-#       echo "Usage: $0 [-i|--index-genome <genome_name>] [-a|--aligner-type <aligner_name>]"
-#       echo "Options:"
-#       echo "  -i, --index-genome <genome_name> : The name of the genome index (e.g., GRCh38, mm10)."
-#       echo "  -a, --aligner-type <aligner_name> : The type of aligner (e.g., hisat2, STAR)."
-#       echo "  -h, --help                       : Display this help message."
-#       exit 0
-#       ;;
-#     --) # End of options. `getopt` places this after all parsed options.
-#       shift # Shift past the --
-#       break # Exit the while loop
-#       ;;
-#     *) # Should not happen if getopt parsing is correct and all options are handled
-#       echo "Internal error: unrecognized option '$1'" >&2
-#       exit 1
-#       ;;
-#   esac
-# done
-
-# # --- Script Logic Starts Here ---
-
-# # Validate that required arguments were provided
-# if [ -z "$GENOME_INDEX_NAME" ] || [ -z "$ALIGNER_NAME" ]; then
-#   echo "Error: Both --index-genome and --aligner-type are required." >&2
-#   echo "Usage: $0 [-i|--index-genome <genome_name>] [-a|--aligner-type <aligner_name>]"
-#   echo "       $0 [--help]"
-#   exit 1
-# fi
-
-# echo "Received genome index name: $GENOME_INDEX_NAME"
-# echo "Received aligner type: $ALIGNER_NAME"
-# echo "Submitting 4_index_ref.sbatch..."
-
-# # Submit the SLURM job, passing the parsed values as positional arguments
-# sbatch 4_index_ref.sbatch "$GENOME_INDEX_NAME" "$ALIGNER_NAME"
-
-# # Check the exit status of the sbatch command itself
-# if [ $? -eq 0 ]; then
-#   echo "SLURM job submitted successfully!"
-# else
-#   echo "Error: SLURM job submission failed." >&2
-#   exit 1
-# fi
-
-#   # HISAT2_INDEX_DIR="/home/data/human_genetics/USERS/jhealy/rna_pipeline_v0.1/reference_data/human/*${index-genome}/*${aligner-type}_index/v_2.2.1-foss-2019b/GRCh38_splices_index"
-
-
-
+#

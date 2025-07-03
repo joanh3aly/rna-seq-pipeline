@@ -29,9 +29,10 @@ All sbatch scripts are located in the scripts directory.
 IMPORTANT: Fastq files must have the correct format. The format we used is "<rnaseqID>_<lane>_<read>.fq.gz". For example: SRR10488341_L1_1.fq.gz (lane 1, read 1) /SRR10488341_L1_2.fq.gz (lane 1, read 2)
 There must be a paired end file for the scripts in the pipeline to work.
 Both .fq and .fastq extensions are handled by the regex in the script.
-2. Add the correct working directory filepath to the pipeline_v0.1 directory for the WORK_DIR constant.
-3. Run the entry script in the bash console: sbatch pipeline_v0.1.sbatch
-This will run each of the 6 stages of the pipeline in the correct order.
+2. Add the correct working directory filepath to the pipeline_v0.1 script for the WORK_DIR constant.  
+3. Add the correct index filepath to the pipeline_v0.1 script for the chosen index for the INDEX constant.
+4. Run the entry script in the bash console: sbatch pipeline_v0.1.sbatch
+This will run each of the 6 stages of the pipeline in the correct order.  
 The run ID directory will be automatically created from the current date and time of the run "run_<yearmonthdate>_<hourminute>" - ie run_20250618_2125
 
 
@@ -39,12 +40,12 @@ The run ID directory will be automatically created from the current date and tim
 - The HISAT2 indexing script runs independently from the pipeline. 
 - hisat2_index_ref.sbatch can be used to create a new index. It is located in the scripts directory.
 - Run sbatch hisat2_index_ref.sbatch in the bash console to execute this script.
-- All indices, reference genomes and supporting files (gtf, bed, vcf etc) are in the reference_data folder.
-- All index files are saved in the reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_<name of custom version> directory.
+- All indices, reference genomes and supporting files (gtf, bed, vcf etc) are in the reference_data folder (files may not be available in github as the files are so large).
+- All index files are saved in the reference_data/human/GRCh38/HISAT2_index/<name of custom version> directory. The script will create the directory automatically after you give the correct path to the directory for the HISAT2_INDEX_DIR constant at the start of the hisat_index_ref.sbatch script.
     * The indexing script should create 8 ht2 files (these are used by the alignment step) and 4 temporary files that are used to generate the ht2 files (genome.exon/genome.haplotype/genome.snp/genome.ss)
-- Currently there are 2 human genome index options in the human/GRCH38 subdirectories:
+- Currently there are 2 human genome index options in the human/GRCH38 subdirectories (too large for github):
     * reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b_pc_trans_masked - this index was generated from the exon and ss (splice site) temp files, with blacklisted PKD1 pseudogenes from the protein coding GRCH38 reference genome (masked_pc_trans_genome_2.fasta) and basic gtf file (gencode.v48.basic.annotation_no_pseudogenes.gtf).
-        * Masking/blacklisting of pseudogenes was completed using BEDtools.
+        * Masking/blacklisting of pseudogenes was completed using BEDtools: https://bedtools.readthedocs.io/en/latest/content/tools/maskfasta.html
     * reference_data/human/GRCh38/HISAT2_index/v_2.2.1-foss-2019b contains an index created from ss and exons.
     * See the gencode website for more reference genome and gtf options: https://www.gencodegenes.org/human/
 - A prebuilt index from the HISAT2 website is available in the grch38_snp directory. This contains SNPs, haplotypes, exons, and splice site data. https://daehwankimlab.github.io/hisat2/download/#h-sapiens

@@ -6,17 +6,15 @@
 #### Outputs: Trimmed FastQ files 
 ####
 #SBATCH --job-name=trim_fastq
-# #SBATCH --output=/home/data/human_genetics/USERS/jhealy/rna_pipeline_v0.1/scripts/slurmfiles/%j_trim_FASTQ.out
-# #SBATCH --error=/home/data/human_genetics/USERS/jhealy/rna_pipeline_v0.1/scripts/slurmfiles/%j_trim_FASTQ.err
 #SBATCH --partition=ProdQ
 #SBATCH --time=2-00:00:00
-#SBATCH --ntasks=1
-# # SBATCH --mem=200
+#SBATCH --ntasks=1 --cpus-per-task=8
+#SBATCH --mem=64G
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=joanhealy24@rcsi.com
 # #SBATCH --array=0-1
 
-set -x
+set -x -o nounset
 
 # module load BBMap
 module load Java/11.0.16 || { echo "ERROR: Failed to load Java/11.0.16 module"; exit 1; }
@@ -39,11 +37,11 @@ ADAPTER_FASTA="$EBROOTTRIMMOMATIC/adapters/TruSeq3-PE.fa"
 TRIMMOMATIC_JAR="$EBROOTTRIMMOMATIC/trimmomatic-0.39.jar"
 
 
-cleanup_unpaired_files() {
+cleanup_unpaired_files_from_scratch () {
     if [[ "$DELETE_UNPAIRED" == "true" ]]; then
-        printf "INFO" "Searching for and deleting unpaired files in '$OUTPUT_DIR_TRIMMED_FASTQ'..." >&2
+        printf "INFO" "Searching for and deleting unpaired files in '$SCRATCH_OUTPUT_DIR'..." >&2
         # Find and delete files whose names contain '_unpaired_'
-        find "$OUTPUT_DIR_TRIMMED_FASTQ" -maxdepth 1 -type f -name "*_unpaired_*" -delete
+        find "$SCRATCH_OUTPUT_DIR" -maxdepth 1 -type f -name "*_unpaired_*" -delete
 
         if [ $? -eq 0 ]; then
             printf "INFO" "Unpaired file cleanup completed successfully." >&2
@@ -73,50 +71,73 @@ if fastq_output=$(populate_fastq_array "$INPUT_DIR"); then
     if [[ "$TASK_ID" -ge 0 ]] && [[ "$TASK_ID" -lt "${#fastq_arr[@]}" ]]; then
       FASTQ_FILE="${fastq_arr[$TASK_ID]}"
       printf "\n Processing file in array job:%s \n" "$FASTQ_FILE"
-      # SAMPLE_NAME=$(basename "$FASTQ_FILE" .fq.gz)
-      # printf "\n Sample name: $SAMPLE_NAME" 
       printf "\n Processing: $FASTQ_FILE (Task ID: $TASK_ID)"
 
 
       if [[ "$FASTQ_FILE" =~ ^"$INPUT_DIR"/.*1\.fq\.gz$ ]]; then
         printf "\n\n FASTQ_FILE is read 1 (processing only initiates for read 1 & 2 when initial read = 1): %s \n" "${FASTQ_FILE}"
         printf "\n\n FASTQ_FILE read 2 is: %s \n" "${FASTQ_FILE/1.fq.gz/2.fq.gz}"
-        # output1="${FASTQ_FILE/.fq.gz/.trim.fq.gz}"
-        # printf "\n Output 1: %s \n" "${output1}"
         
         # Extract the filename from the input path
         input_filename=$(basename "$FASTQ_FILE")
         printf "\n Input_filename: %s \n" "${input_filename}"
         # Replace "1.fq.gz" with "1.trim.fq.gz" in the filename
+        input_filepath_NFS_r1="${INPUT_DIR}/${input_filename}"
+        input_filepath_NFS_r2="${INPUT_DIR}/${input_filename/1.fq.gz/2.fq.gz}"
         output_filename_r1="${input_filename/1.fq.gz/1.trim.fq.gz}"
         output_filename_r2="${input_filename/1.fq.gz/2.trim.fq.gz}"
         output_filename_r1_unpaired="${input_filename/1.fq.gz/unpaired_1.trim.fq.gz}"
         output_filename_r2_unpaired="${input_filename/1.fq.gz/unpaired_2.trim.fq.gz}"
-        output_filepath_r1="${OUTPUT_DIR_TRIMMED_FASTQ}/${output_filename_r1}"
-        output_filepath_r2="${OUTPUT_DIR_TRIMMED_FASTQ}/${output_filename_r2}"
-        output_filepath_r1_unpaired="${OUTPUT_DIR_TRIMMED_FASTQ}/${output_filename_r1_unpaired}"
-        output_filepath_r2_unpaired="${OUTPUT_DIR_TRIMMED_FASTQ}/${output_filename_r2_unpaired}"
-        printf "\n\n Output filepaths: \n R1= %s \n\n R2= %s \n"  "${output_filepath_r1}" "${output_filepath_r2}"
 
+
+        # Stage input GDB to fast storage; there is a risk if someone else is also using the scratch space
+        # so check for enough space for each file
+        #-
+        # l_scratch_space=$(df -k --output=avail "${TMPDIR}")
+        # l_scratch_space="${l_scratch_space#*Avail*}"
+        # echo "Free space on scratch disk (KB):${l_scratch_space}"
+        # Get size of the GDB database
+        # l_gdb=$(du -ks --apparent-size "${INPUT_DIR}")
+        # l_gdb="${l_gdb%[[:blank:]]*}"
+        # if (( l_scratch_space > l_gdb )); then
+          # File will fit on scratch disk
+        echo "Staging input files to scratch disk"
+        SCRATCH_INPUT_DIR="${TMPDIR}/trim_input_fastq"
+        SCRATCH_OUTPUT_DIR="${TMPDIR}/trim_output_fastq"
+        mkdir "${SCRATCH_INPUT_DIR}"
+        mkdir "${SCRATCH_OUTPUT_DIR}"
+
+        input_filepath_SCRATCH_r1="$SCRATCH_INPUT_DIR/${input_filename}"
+        input_filepath_SCRATCH_r2="$SCRATCH_INPUT_DIR/${input_filename/1.fq.gz/2.fq.gz}"
+        cp "${input_filepath_NFS_r1}" "${SCRATCH_INPUT_DIR}"
+        cp "${input_filepath_NFS_r2}" "${SCRATCH_INPUT_DIR}"
+        
+        output_filepath_SCRATCH_r1="${SCRATCH_OUTPUT_DIR}/${output_filename_r1}"
+        output_filepath_SCRATCH_r2="${SCRATCH_OUTPUT_DIR}/${output_filename_r2}"
+        output_filepath_SCRATCH_r1_unpaired="${SCRATCH_OUTPUT_DIR}/${output_filename_r1_unpaired}"
+        output_filepath_SCRATCH_r2_unpaired="${SCRATCH_OUTPUT_DIR}/${output_filename_r2_unpaired}"
  
         java -jar "$TRIMMOMATIC_JAR" PE \
-        -threads 8 \
+        -threads "$SLURM_CPUS_PER_TASK" \
         -phred33 \
-        "${FASTQ_FILE}" \
-        "${FASTQ_FILE/1.fq.gz/2.fq.gz}" \
-        "${output_filepath_r1}" \
-        "${output_filepath_r1_unpaired}" \
-      	"${output_filepath_r2}" \
-      	"${output_filepath_r2_unpaired}" \
+        "${input_filepath_SCRATCH_r1}" \
+        "${input_filepath_SCRATCH_r2}" \
+        "${output_filepath_SCRATCH_r1}" \
+        "${output_filepath_SCRATCH_r1_unpaired}" \
+      	"${output_filepath_SCRATCH_r2}" \
+      	"${output_filepath_SCRATCH_r2_unpaired}" \
         ILLUMINACLIP:"${ADAPTER_FASTA}":2:30:10 \
         LEADING:3 \
         TRAILING:3 \
         SLIDINGWINDOW:4:15 \
         MINLEN:36 \
-        -trimlog "${WORK_DIR}/${run_id}/slurmfiles/${run_id}.trim.log" 
+        -trimlog "${WORK_DIR}/${run_id}/slurmfiles/${input_filename}.trim.log" 
 
         printf "\n Trimming completed for: $FASTQ_FILE"
-        cleanup_unpaired_files
+        cleanup_unpaired_files_from_scratch "${SCRATCH_OUTPUT_DIR}"
+        cp "${output_filepath_SCRATCH_r1}" "${OUTPUT_DIR_TRIMMED_FASTQ}"
+        cp "${output_filepath_SCRATCH_r2}" "${OUTPUT_DIR_TRIMMED_FASTQ}"
+        rm -rf "${SCRATCH_INPUT_DIR}" "${SCRATCH_OUTPUT_DIR}"
       else
         printf "\n Trimming NOT completed for (read is not 1 / array name doesn't match file name): $FASTQ_FILE"
         # exit 1
@@ -132,6 +153,16 @@ else
   exit 1
 fi
 printf "\n FastQ Trim processing finished."
+
+
+
+
+
+
+
+
+
+
 
 
 
